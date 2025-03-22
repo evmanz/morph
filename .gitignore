@@ -30,3 +30,6 @@
 *.exe
 *.out
 *.app
+
+fake-gcs-server
+gcs-cahce-layer/build
