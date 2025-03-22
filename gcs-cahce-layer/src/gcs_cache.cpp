@@ -1,10 +1,20 @@
-#include "cache.h"
-#include "http_client.h"
+#include "gcs_cache.h"
 #include <filesystem>
+#include <fstream>
+
+namespace gcs = google::cloud::storage;
 
 GCSCache::GCSCache(const Config& config)
-    : config_(config), current_cache_size_(0) {
+    : config_(config), current_cache_size_(0),
+    storage_client_(gcs::Client(
+        gcs::ClientOptions::CreateDefaultClientOptions().value()
+            .set_endpoint(config.gcs_endpoint)
+            .set_credentials(gcs::oauth2::CreateAnonymousCredentials()))) {
     std::filesystem::create_directories(config.cache_dir);
+}
+
+std::shared_ptr<Client> GCSCache::get_client(const QosConfig& qos) {
+    return std::make_shared<Client>(this, qos);
 }
 
 std::string GCSCache::get_or_fetch_object(const std::string& key) {
@@ -18,14 +28,17 @@ std::string GCSCache::get_or_fetch_object(const std::string& key) {
         return local_path;
     }
 
-    std::string fetched_file_path = fetch_from_gcs(key);
-    if (fetched_file_path.empty()) return "";
+    auto reader = storage_client_.ReadObject(config_.bucket_name, key);
+    if (!reader) throw std::runtime_error(reader.status().message());
 
-    size_t file_size = std::filesystem::file_size(fetched_file_path);
+    std::string temp_path = local_path + ".tmp";
+    std::ofstream ofs(temp_path, std::ios::binary);
+    ofs << reader.rdbuf();
+    ofs.close();
+
+    size_t file_size = std::filesystem::file_size(temp_path);
     evict_if_needed(file_size);
-
-    // Rename (now safe, same filesystem)
-    std::filesystem::rename(fetched_file_path, local_path);
+    std::filesystem::rename(temp_path, local_path);
 
     lru_keys_.push_front(key);
     cache_index_[key] = lru_keys_.begin();
@@ -50,20 +63,3 @@ bool GCSCache::is_cached(const std::string& key) {
     return cache_index_.find(key) != cache_index_.end() && std::filesystem::exists(config_.cache_dir + "/" + key);
 }
 
-std::string GCSCache::fetch_from_gcs(const std::string& key) {
-    std::string url = config_.gcs_server_endpoint + "/storage/v1/b/" + config_.bucket_name +
-                      "/o/" + key + "?alt=media";
-    
-    // Temporary path is now within cache directory:
-    std::string temp_file = config_.cache_dir + "/" + key + ".tmp";
-
-    if(HttpClient::download_file(url, temp_file)) {
-        return temp_file;
-    }
-
-    // Cleanup on failure
-    if (std::filesystem::exists(temp_file))
-        std::filesystem::remove(temp_file);
-
-    return "";
-}
