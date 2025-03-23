@@ -1,18 +1,19 @@
 #include "cli_utils.h"
-#include "gcs_cache.h"
+#include "server.h"
+#include <memory>
 #include <iostream>
 
 int main(int argc, char* argv[]) {
     try {
         CliConfig cli_config = parse_cli(argc, argv);
+        auto cache = std::make_shared<GCSCache>(cli_config.config);
 
-        GCSCache cache(cli_config.config);
-        auto client = cache.get_client(cli_config.qos);
+        CacheServer server(cache, cli_config.qos, 8080); // Port could be made configurable
+        std::cout << "Starting cache server on port 8080...\n";
+        server.run();
 
-        auto file_path = client->get_object(cli_config.file_name);
-        std::cout << "File cached at: " << file_path << "\n";
     } catch (const std::exception& e) {
-        std::cerr << "Error: " << e.what() << "\n";
+        std::cerr << "Fatal Error: " << e.what() << "\n";
         return 1;
     }
 
