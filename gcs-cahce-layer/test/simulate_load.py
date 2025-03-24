@@ -41,13 +41,17 @@ def fetch_object(client_id):
 
 # === Load Patterns ===
 def run_noisy_client():
-    print("🚨 Running noisy neighbor test...")
-    for _ in range(REQUESTS_PER_CLIENT):
-        fetch_object(NOISY_CLIENT_ID)
-        time.sleep(0.01)
+    print("Running noisy neighbor test...")
+
+    with ThreadPoolExecutor(max_workers=20) as executor:
+        futures = []
+        for _ in range(REQUESTS_PER_CLIENT):
+            futures.append(executor.submit(fetch_object, NOISY_CLIENT_ID))
+        for future in futures:
+            future.result()
 
 def run_polite_clients():
-    print("🤝 Running polite clients test...")
+    print("Running polite clients test...")
     with ThreadPoolExecutor(max_workers=CLIENT_COUNT) as executor:
         futures = []
         for i in range(CLIENT_COUNT):
