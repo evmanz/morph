@@ -39,6 +39,8 @@ bool CacheServer::check_concurrency_limit(const std::string& client_id, httplib:
     auto& state = client_states_[client_id];
     std::lock_guard<std::mutex> lock(state.mutex);
 
+    // Check if client has reached max concurrent requests
+    // TODO: Implement a more sophisticated rate limiting algorithm
     if (state.active_requests >= qos_config_.max_concurrent_requests) {
         res.status = HttpStatus::TooManyRequests;
         res.set_content("Too Many Requests", "text/plain");
