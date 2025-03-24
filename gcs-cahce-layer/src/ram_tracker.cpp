@@ -9,7 +9,8 @@ void RamTracker::wait_and_reserve(size_t bytes) {
         return used_bytes_ + bytes <= max_bytes_;
     });
     used_bytes_ += bytes;
-    LOG(INFO) << "Reserved " << bytes << " bytes, total in use: " << used_bytes_ << "\n";
+    // too verbose
+    // LOG(INFO) << "Reserved " << bytes << " bytes, total in use: " << used_bytes_ << "\n";
 }
 
 void RamTracker::release(size_t bytes) {
@@ -18,5 +19,6 @@ void RamTracker::release(size_t bytes) {
         used_bytes_ -= bytes;
     }
     cond_.notify_one();
-    LOG(INFO) << "Released " << bytes << " bytes, total in use: " << used_bytes_ << "\n";
+    // too verbose
+    // LOG(INFO) << "Released " << bytes << " bytes, total in use: " << used_bytes_ << "\n";
 }

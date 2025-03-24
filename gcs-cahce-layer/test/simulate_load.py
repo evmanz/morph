@@ -1,30 +1,37 @@
 import requests
 import threading
 import time
+import random
 from concurrent.futures import ThreadPoolExecutor
 
-SERVER_URL = "http://localhost:8080/object/test_file.txt"
+SERVER_URL = "http://localhost:8080/object"
 REQUESTS_PER_CLIENT = 50
 CLIENT_COUNT = 10
-NOISY_CLIENT_ID = "noisy"
-POLITE_CLIENT_PREFIX = "client"
+NOISY_CLIENT_ID = "noisy_client"
+POLITE_CLIENT_PREFIX = "polite_client"
+BUCKET_NAME = "my_bucket"
+
+def get_random_file():
+    return f"random_file_{random.randint(1, 10)}.bin"
 
 def fetch_object(client_id):
     try:
+        file_name = get_random_file()
         params = {
-            "bucket": "my_bucket",
-            "file": "test_file.txt",
+            "bucket": BUCKET_NAME,
+            "file": file_name,
             "client_id": client_id
         }
         start = time.time()
         r = requests.get(SERVER_URL, params=params)
         duration = time.time() - start
+
         if r.status_code == 200:
-            print(f"[OK] {client_id} received {len(r.content)} bytes in {duration:.2f}s")
+            print(f"[OK] {client_id} fetched {file_name} ({len(r.content)} bytes) in {duration:.2f}s")
         elif r.status_code == 429:
-            print(f"[THROTTLED] {client_id} got 429 in {duration:.2f}s")
+            print(f"[THROTTLED] {client_id} got 429 for {file_name} in {duration:.2f}s")
         else:
-            print(f"[ERROR] {client_id} got {r.status_code} in {duration:.2f}s")
+            print(f"[ERROR] {client_id} got {r.status_code} for {file_name} in {duration:.2f}s")
     except Exception as e:
         print(f"[FAIL] {client_id} exception: {e}")
 
@@ -46,7 +53,6 @@ def run_polite_clients():
             future.result()
 
 def main():
-    # Run both tests in parallel
     noisy_thread = threading.Thread(target=run_noisy_client)
     noisy_thread.start()
 
@@ -55,4 +61,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
