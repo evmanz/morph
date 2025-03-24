@@ -5,7 +5,6 @@
 
 struct IniConfig {
     std::string endpoint = "http://localhost:4443";
-    std::string bucket = "default_bucket";
     std::string cache_dir = "./cache";
     size_t max_disk = 500;
     size_t max_ram = 64;
@@ -19,7 +18,6 @@ static int ini_cfg_reader(void* user, const char* section, const char* name, con
 
     if (sec == "gcs") {
         if (key == "endpoint") config->endpoint = value;
-        else if (key == "bucket") config->bucket = value;
     } else if (sec == "cache") {
         if (key == "cache_dir") config->cache_dir = value;
         else if (key == "max_disk") config->max_disk = std::stoul(value);
@@ -63,7 +61,6 @@ CliConfig parse_cli(int argc, char* argv[]) {
             .max_ram_usage = ini_cfg.max_ram * 1024 * 1024,
             .cache_dir = ini_cfg.cache_dir,
             .gcs_endpoint = ini_cfg.endpoint,
-            .bucket_name = ini_cfg.bucket
         },
         .qos = {
             .max_concurrent_requests = ini_cfg.max_concurrency,

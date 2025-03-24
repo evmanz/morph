@@ -7,7 +7,7 @@ class GCSCache;
 class Client {
 public:
     Client(GCSCache* cache, const QosConfig& qos);
-    std::string get_object(const std::string& key);
+    std::string get_object(const std::string& file, const std::string& bucket);
 
 private:
     GCSCache* cache_;

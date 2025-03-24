@@ -15,9 +15,9 @@ void Client::wait_for_slot() {
     ++concurrent_requests_;
 }
 
-std::string Client::get_object(const std::string& key) {
+std::string Client::get_object(const std::string& file, const std::string& bucket) {
     wait_for_slot();
-    auto path = cache_->get_or_fetch_object(key);
+    auto path = cache_->get_or_fetch_object(file, bucket);
     {
         std::lock_guard<std::mutex> lock(qos_mutex_);
         --concurrent_requests_;

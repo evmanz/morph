@@ -7,6 +7,10 @@
 #include "httplib.h"
 #include "constants.h"
 #include <glog/logging.h>
+#include <tuple>
+#include <optional>
+
+typedef std::tuple<std::string, std::string, std::string> req_params;
 
 struct ClientState {
     std::mutex mutex;
@@ -28,7 +32,7 @@ private:
     std::mutex state_mutex_;
     std::unordered_map<std::string, ClientState> client_states_;
 
-    bool get_client_id(const httplib::Request& req, httplib::Response& res, std::string& client_id_out);
+    std::optional<req_params> parse_request_params(const httplib::Request& req, httplib::Response& res);
     bool check_concurrency_limit(const std::string& client_id, httplib::Response& res);
     bool check_bandwidth_limit(const std::string& client_id, size_t bytes);
     void stream_file_to_client(const std::string& client_id, const std::string& file_path, httplib::Response& res);

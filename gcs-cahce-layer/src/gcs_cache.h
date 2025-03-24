@@ -14,7 +14,7 @@ public:
     RamTracker& ram_tracker();
     std::shared_ptr<Client> get_client(const QosConfig& qos);
 
-    std::string get_or_fetch_object(const std::string& key);
+    std::string get_or_fetch_object(const std::string& file, const std::string& bucket);
 
 private:
     Config config_;

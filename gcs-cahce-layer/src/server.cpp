@@ -8,27 +8,28 @@
 CacheServer::CacheServer(std::shared_ptr<GCSCache> cache, const QosConfig& qos_config, int port)
     : cache_(cache), qos_config_(qos_config), port_(port) {}
 
+    
 void CacheServer::run() {
     httplib::Server svr;
 
-    svr.Get(R"(/object/(\S+))", [&](const httplib::Request& req, httplib::Response& res) {
-        std::string client_id;
-        if (!get_client_id(req, res, client_id)) return;
-
+    svr.Get("/object", [&](const httplib::Request& req, httplib::Response& res) {
+        auto parsed = parse_request_params(req, res);
+        if (!parsed) return;
+    
+        auto [bucket, file, client_id] = *parsed;
+    
         lock_and_initialize_client(client_id);
         if (!check_concurrency_limit(client_id, res)) return;
-
-        auto client = cache_->get_client(qos_config_);
-        std::string key = req.matches[1];
-
+    
         try {
-            auto file_path = client->get_object(key);
+            auto client = cache_->get_client(qos_config_);
+            auto file_path = client->get_object(file, bucket);
             stream_file_to_client(client_id, file_path, res);
         } catch (const std::exception& e) {
-            decrement_concurrency(client_id);
             res.status = HttpStatus::InternalServerError;
             res.set_content(e.what(), "text/plain");
         }
+        decrement_concurrency(client_id);
     });
 
     svr.listen("0.0.0.0", port_);
@@ -66,7 +67,8 @@ bool CacheServer::check_bandwidth_limit(const std::string& client_id, size_t byt
     }
 
     state.bytes_sent_this_sec += bytes;
-    LOG(INFO) << "[REQ] client_id=" << client_id << ", bytes_sent_this_sec=" << state.bytes_sent_this_sec << "\n";
+    // too verbose
+    // LOG(INFO) << "[REQ] client_id=" << client_id << ", bytes_sent_this_sec=" << state.bytes_sent_this_sec << "\n";
     return true;
 }
 
@@ -119,15 +121,18 @@ void CacheServer::decrement_concurrency(const std::string& id) {
     LOG(INFO) << "[REQ] client_id=" << id << ", active_requests=" << state.active_requests << "\n";
 }
 
-bool CacheServer::get_client_id(const httplib::Request& req, httplib::Response& res, std::string& client_id_out) {
-    if (req.has_param("client_id")) {
-        client_id_out = req.get_param_value("client_id");
-        LOG(INFO) << "[REQ] client_id=" << client_id_out << "\n";
-        return true;
-    } else {
+std::optional<req_params>
+CacheServer::parse_request_params(const httplib::Request& req, httplib::Response& res) {
+    if (!req.has_param("bucket") || !req.has_param("file") || !req.has_param("client_id")) {
+        LOG(WARNING) << "Missing one or more required query parameters: 'bucket', 'file', 'client_id'\n";
         res.status = HttpStatus::BadRequest;
-        res.set_content("Missing 'client_id' query parameter", "text/plain");
-        LOG(INFO) << "[REQ] HttpStatus::BadRequest \n";
-        return false;
+        res.set_content("Missing one or more required query parameters: 'bucket', 'file', 'client_id'", "text/plain");
+        return std::nullopt;
     }
+
+    std::string bucket = req.get_param_value("bucket");
+    std::string file = req.get_param_value("file");
+    std::string client_id = req.get_param_value("client_id");
+
+    return std::make_tuple(bucket, file, client_id);
 }

@@ -17,36 +17,50 @@ std::shared_ptr<Client> GCSCache::get_client(const QosConfig& qos) {
     return std::make_shared<Client>(this, qos);
 }
 
-std::string GCSCache::get_or_fetch_object(const std::string& key) {
+std::string GCSCache::get_or_fetch_object(const std::string& file, const std::string& bucket) {
     std::lock_guard<std::mutex> lock(cache_mutex_);
-    std::string local_path = config_.cache_dir + "/" + key;
-    LOG(INFO) << "[CACHE] Fetching Object: " << key << "\n";
 
-    if (is_cached(key)) {
-        LOG(INFO) << "[CACHE] HIT: " << key << "\n";
-        lru_keys_.erase(cache_index_[key]);
-        lru_keys_.push_front(key);
-        cache_index_[key] = lru_keys_.begin();
+    // Build path: <cache_dir>/<bucket>/<file>
+    std::string bucket_dir = config_.cache_dir + "/" + bucket;
+    std::string local_path = bucket_dir + "/" + file;
+    std::string cache_key = bucket + "/" + file;
+
+    LOG(INFO) << "[CACHE] Fetching Object: " << file << " form bucket: " << bucket << "\n";
+
+    if (is_cached(cache_key)) {
+        LOG(INFO) << "[CACHE] HIT: " << cache_key << "\n";
+        lru_keys_.erase(cache_index_[cache_key]);
+        lru_keys_.push_front(cache_key);
+        cache_index_[cache_key] = lru_keys_.begin();
         return local_path;
     }
 
-    LOG(INFO) << "[CACHE] MISS: " << key << ", reading from remote store\n";
-    auto reader = storage_client_.ReadObject(config_.bucket_name, key);
+    LOG(INFO) << "[CACHE] MISS: " << cache_key << ", reading from remote store\n";
+    auto reader = storage_client_.ReadObject(bucket, file);
     if (!reader) {
-        LOG(ERROR) << "ReadObject error " << key << "\n";
+        LOG(ERROR) << "ReadObject error: " << file << " is not in bucket " << bucket << "\n";
         throw std::runtime_error(reader.status().message());
     }
+
+    // Ensure bucket subdirectory exists
+    std::filesystem::create_directories(bucket_dir);
+
+    // Write to temp file first
     std::string temp_path = local_path + ".tmp";
     std::ofstream ofs(temp_path, std::ios::binary);
     ofs << reader.rdbuf();
     ofs.close();
 
+    // Get file size and apply eviction policy
     size_t file_size = std::filesystem::file_size(temp_path);
     evict_if_needed(file_size);
+
+    // Finalize file
     std::filesystem::rename(temp_path, local_path);
 
-    lru_keys_.push_front(key);
-    cache_index_[key] = lru_keys_.begin();
+    // Update cache metadata
+    lru_keys_.push_front(cache_key);
+    cache_index_[cache_key] = lru_keys_.begin();
     current_cache_size_ += file_size;
 
     return local_path;
