@@ -2,18 +2,22 @@ import requests
 import threading
 import time
 import random
+import argparse
 from concurrent.futures import ThreadPoolExecutor
 
+# === Config ===
 SERVER_URL = "http://localhost:8080/object"
+BUCKET_NAME = "my_bucket"
 REQUESTS_PER_CLIENT = 50
 CLIENT_COUNT = 10
-NOISY_CLIENT_ID = "noisy_client"
-POLITE_CLIENT_PREFIX = "polite_client"
-BUCKET_NAME = "my_bucket"
+NOISY_CLIENT_ID = "noisy"
+POLITE_CLIENT_PREFIX = "client"
 
+# === File Pool ===
 def get_random_file():
     return f"random_file_{random.randint(1, 10)}.bin"
 
+# === Request Logic ===
 def fetch_object(client_id):
     try:
         file_name = get_random_file()
@@ -35,14 +39,15 @@ def fetch_object(client_id):
     except Exception as e:
         print(f"[FAIL] {client_id} exception: {e}")
 
+# === Load Patterns ===
 def run_noisy_client():
-    print("Starting noisy neighbor test...")
+    print("🚨 Running noisy neighbor test...")
     for _ in range(REQUESTS_PER_CLIENT):
         fetch_object(NOISY_CLIENT_ID)
-        time.sleep(0.01)  # hammer the server fast
+        time.sleep(0.01)
 
 def run_polite_clients():
-    print("Starting max load test with polite clients...")
+    print("🤝 Running polite clients test...")
     with ThreadPoolExecutor(max_workers=CLIENT_COUNT) as executor:
         futures = []
         for i in range(CLIENT_COUNT):
@@ -52,12 +57,26 @@ def run_polite_clients():
         for future in futures:
             future.result()
 
+# === Main CLI Control ===
 def main():
-    noisy_thread = threading.Thread(target=run_noisy_client)
-    noisy_thread.start()
+    parser = argparse.ArgumentParser(description="Simulate GCS cache load")
+    parser.add_argument(
+        "-s", "--scenario",
+        choices=["noisy", "polite", "both"],
+        required=True,
+        help="Test scenario to run: 'noisy', 'polite', or 'both'"
+    )
+    args = parser.parse_args()
 
-    run_polite_clients()
-    noisy_thread.join()
+    if args.scenario == "noisy":
+        run_noisy_client()
+    elif args.scenario == "polite":
+        run_polite_clients()
+    elif args.scenario == "both":
+        noisy_thread = threading.Thread(target=run_noisy_client)
+        noisy_thread.start()
+        run_polite_clients()
+        noisy_thread.join()
 
 if __name__ == "__main__":
     main()
