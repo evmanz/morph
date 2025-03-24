@@ -5,7 +5,7 @@
 namespace gcs = google::cloud::storage;
 
 GCSCache::GCSCache(const Config& config)
-    : config_(config), current_cache_size_(0),
+    : config_(config), current_cache_size_(0), ram_tracker_(config.max_ram_usage),
     storage_client_(gcs::Client(
         gcs::ClientOptions::CreateDefaultClientOptions().value()
             .set_endpoint(config.gcs_endpoint)
@@ -63,3 +63,6 @@ bool GCSCache::is_cached(const std::string& key) {
     return cache_index_.find(key) != cache_index_.end() && std::filesystem::exists(config_.cache_dir + "/" + key);
 }
 
+RamTracker& GCSCache::ram_tracker() {
+    return ram_tracker_;
+}

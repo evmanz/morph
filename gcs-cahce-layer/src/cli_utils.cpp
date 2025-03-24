@@ -36,15 +36,14 @@ CliConfig parse_cli(int argc, char* argv[]) {
     options.add_options()
         ("cfg", "INI config file", cxxopts::value<std::string>())
         ("endpoint", "GCS endpoint URL", cxxopts::value<std::string>())
-        // ("file", "File name to fetch", cxxopts::value<std::string>())
         ("help", "Print usage");
 
     auto result = options.parse(argc, argv);
 
-    // if (result.count("help") || !result.count("file")) {
-    //     std::cout << options.help() << "\n";
-    //     exit(1);
-    // }
+    if (result.count("help")) {
+        std::cout << options.help() << "\n";
+        exit(1);
+    }
 
     IniConfig ini_cfg;
     if (result.count("cfg")) {
@@ -70,7 +69,6 @@ CliConfig parse_cli(int argc, char* argv[]) {
             .max_concurrent_requests = ini_cfg.max_concurrency,
             .max_bandwidth_bps = ini_cfg.max_bandwidth * 1024 * 1024
         }
-        // .file_name = result["file"].as<std::string>()
     };
 
     return cli_config;
