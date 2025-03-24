@@ -41,10 +41,12 @@ bool CacheServer::check_concurrency_limit(const std::string& client_id, httplib:
     if (state.active_requests >= qos_config_.max_concurrent_requests) {
         res.status = HttpStatus::TooManyRequests;
         res.set_content("Too Many Requests", "text/plain");
+        LOG(WARNING) << "[REQ] HttpStatus::TooManyRequests for client_id=" << client_id << "\n";
         return false;
     }
 
     state.active_requests++;
+    LOG(INFO) << "[REQ] client_id=" << client_id << ", active_requests=" << state.active_requests << "\n";
     return true;
 }
 
@@ -59,10 +61,12 @@ bool CacheServer::check_bandwidth_limit(const std::string& client_id, size_t byt
     }
 
     if (state.bytes_sent_this_sec + bytes > qos_config_.max_bandwidth_bps) {
+        LOG(WARNING) << "[REQ] client_id=" << client_id << ", bandwidth limit reached\n";
         return false;
     }
 
     state.bytes_sent_this_sec += bytes;
+    LOG(INFO) << "[REQ] client_id=" << client_id << ", bytes_sent_this_sec=" << state.bytes_sent_this_sec << "\n";
     return true;
 }
 
@@ -70,8 +74,11 @@ void CacheServer::stream_file_to_client(const std::string& client_id,
                                         const std::string& file_path,
                                         httplib::Response& res) {
     auto ifs = std::make_shared<std::ifstream>(file_path, std::ios::binary);
-    if (!ifs || !ifs->is_open()) throw std::runtime_error("Failed to open file");
-
+    if (!ifs || !ifs->is_open()) {
+        LOG(ERROR) << "Failed to open file: " << file_path << "\n";
+        throw std::runtime_error("Failed to open file"); // perhaps not the best for production? 
+    }
+    LOG(INFO) << "[REQ] Streaming file: " << file_path << " to client_id=" << client_id << "\n";
     res.set_chunked_content_provider("application/octet-stream",
         [this, client_id, ifs](size_t offset, httplib::DataSink& sink) mutable {
             cache_->ram_tracker().wait_and_reserve(Constants::StreamBufferSize);
@@ -93,6 +100,7 @@ void CacheServer::stream_file_to_client(const std::string& client_id,
             cache_->ram_tracker().release(Constants::StreamBufferSize);
             return true;
         });
+    LOG(INFO) << "[REQ] HttpStatus::Ok for client_id=" << client_id << "\n";
 }
 
 void CacheServer::lock_and_initialize_client(const std::string& id) {
@@ -108,15 +116,18 @@ void CacheServer::decrement_concurrency(const std::string& id) {
     auto& state = client_states_[id];
     std::lock_guard<std::mutex> lock(state.mutex);
     if (state.active_requests > 0) state.active_requests--;
+    LOG(INFO) << "[REQ] client_id=" << id << ", active_requests=" << state.active_requests << "\n";
 }
 
 bool CacheServer::get_client_id(const httplib::Request& req, httplib::Response& res, std::string& client_id_out) {
     if (req.has_param("client_id")) {
         client_id_out = req.get_param_value("client_id");
+        LOG(INFO) << "[REQ] client_id=" << client_id_out << "\n";
         return true;
     } else {
         res.status = HttpStatus::BadRequest;
         res.set_content("Missing 'client_id' query parameter", "text/plain");
+        LOG(INFO) << "[REQ] HttpStatus::BadRequest \n";
         return false;
     }
 }

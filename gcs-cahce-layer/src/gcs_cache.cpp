@@ -20,17 +20,22 @@ std::shared_ptr<Client> GCSCache::get_client(const QosConfig& qos) {
 std::string GCSCache::get_or_fetch_object(const std::string& key) {
     std::lock_guard<std::mutex> lock(cache_mutex_);
     std::string local_path = config_.cache_dir + "/" + key;
+    LOG(INFO) << "[CACHE] Fetching Object: " << key << "\n";
 
     if (is_cached(key)) {
+        LOG(INFO) << "[CACHE] HIT: " << key << "\n";
         lru_keys_.erase(cache_index_[key]);
         lru_keys_.push_front(key);
         cache_index_[key] = lru_keys_.begin();
         return local_path;
     }
 
+    LOG(INFO) << "[CACHE] MISS: " << key << ", reading from remote store\n";
     auto reader = storage_client_.ReadObject(config_.bucket_name, key);
-    if (!reader) throw std::runtime_error(reader.status().message());
-
+    if (!reader) {
+        LOG(ERROR) << "ReadObject error " << key << "\n";
+        throw std::runtime_error(reader.status().message());
+    }
     std::string temp_path = local_path + ".tmp";
     std::ofstream ofs(temp_path, std::ios::binary);
     ofs << reader.rdbuf();
@@ -49,10 +54,12 @@ std::string GCSCache::get_or_fetch_object(const std::string& key) {
 
 void GCSCache::evict_if_needed(size_t incoming_file_size) {
     while (current_cache_size_ + incoming_file_size > config_.max_disk_cache_size && !lru_keys_.empty()) {
+        LOG(INFO) << "[CACHE] EVICTING, not enough disk space: " << current_cache_size_ << " + " << incoming_file_size << " > " << config_.max_disk_cache_size << "\n";
         std::string lru_key = lru_keys_.back();
         std::string file_path = config_.cache_dir + "/" + lru_key;
         size_t size_removed = std::filesystem::file_size(file_path);
         std::filesystem::remove(file_path);
+        LOG(INFO) << "[CACHE] EVICTED: " << file_path << " (" << size_removed << " bytes)\n";
         lru_keys_.pop_back();
         cache_index_.erase(lru_key);
         current_cache_size_ -= size_removed;

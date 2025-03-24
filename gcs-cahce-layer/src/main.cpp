@@ -2,8 +2,11 @@
 #include "server.h"
 #include <memory>
 #include <iostream>
+#include <glog/logging.h>
 
 int main(int argc, char* argv[]) {
+    google::InitGoogleLogging(argv[0]);
+    FLAGS_logtostderr = 1;
     try {
         CliConfig cli_config = parse_cli(argc, argv);
         auto cache = std::make_shared<GCSCache>(cli_config.config);

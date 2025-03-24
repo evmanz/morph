@@ -6,6 +6,7 @@
 #include <mutex>
 #include "httplib.h"
 #include "constants.h"
+#include <glog/logging.h>
 
 struct ClientState {
     std::mutex mutex;

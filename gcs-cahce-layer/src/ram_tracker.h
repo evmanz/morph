@@ -1,6 +1,7 @@
 #pragma once
 #include <mutex>
 #include <condition_variable>
+#include <glog/logging.h>
 
 class RamTracker {
 public:
@@ -14,9 +15,6 @@ public:
 
     // Releases memory back to the pool.
     void release(size_t bytes);
-
-    // For diagnostics
-    size_t current_usage() const;
 
 private:
     const size_t max_bytes_;
