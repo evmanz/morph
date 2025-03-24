@@ -12,5 +12,4 @@ struct Config {
     std::string cache_dir;
 
     std::string gcs_endpoint;
-    std::string bucket_name;
 };
